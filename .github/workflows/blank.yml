@@ -2,8 +2,8 @@ name: Free 6-Hour RDP
 
 on:
   schedule:
-    - cron: '0 */6 * * *'    # Runs every 6 hours
-  workflow_dispatch:         # Manual trigger
+    - cron: '0 */6 * * *'  # Runs every 6 hours
+  workflow_dispatch:
 
 jobs:
   build:
@@ -32,8 +32,8 @@ jobs:
 
     - name: Wait and Send RDP Info to Telegram
       env:
-        BOT_TOKEN: 7866819450:AAHvce1DZKafond6wlVQfA6Id6haVnFakCM   # <--- replace with your bot token
-        CHAT_ID: 5224269718       # <--- replace with your Telegram chat ID
+        BOT_TOKEN: ${{ secrets.BOT_TOKEN }}    # Add this in your repo secrets
+        CHAT_ID: ${{ secrets.CHAT_ID }}        # Add this in your repo secrets
       run: |
         Start-Sleep -Seconds 30
 
@@ -53,16 +53,7 @@ jobs:
         }
 
         if ($success) {
-          $Message = @"
-✅ *6-Hour RDP Created!*
-
-*Address:* `$rdp`
-*Username:* `Administrator`
-*Password:* `Gte2252@#`
-
-👉 Open `mstsc.exe` and connect!
-"@
-
+          $Message = "✅ *6-Hour RDP Created!*`n`n*Address:* `$rdp``n*Username:* `Administrator``n*Password:* `Gte2252@#``n`n👉 Open `mstsc.exe` and connect!"
           $Message = [uri]::EscapeDataString($Message)
           Invoke-RestMethod -Uri "https://api.telegram.org/bot$env:BOT_TOKEN/sendMessage?chat_id=$env:CHAT_ID&text=$Message&parse_mode=Markdown"
           Write-Host "✅ Sent to Telegram"
