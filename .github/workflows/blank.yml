@@ -1,7 +1,9 @@
-name: Free 6-Hour RDP with Telegram Notify
+name: Free 6-Hour RDP
 
 on:
-  workflow_dispatch:
+  schedule:
+    - cron: '0 */6 * * *'  # <-- rerun every 6 hours
+  workflow_dispatch:       # <-- allow manual run too
 
 jobs:
   build:
@@ -10,7 +12,9 @@ jobs:
     steps:
     - name: Set RDP Password
       run: |
+        echo "Setting password..."
         net user runneradmin Gte2252@#
+        echo "Enabling RDP..."
         Set-ItemProperty -Path "HKLM:\System\CurrentControlSet\Control\Terminal Server" -Name "fDenyTSConnections" -Value 0
         Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
       shell: powershell
@@ -19,6 +23,7 @@ jobs:
       run: |
         Invoke-WebRequest -Uri "https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-stable-windows-amd64.zip" -OutFile "ngrok.zip"
         Expand-Archive -Path "ngrok.zip" -DestinationPath "$env:USERPROFILE\ngrok"
+        dir $env:USERPROFILE\ngrok
       shell: powershell
 
     - name: Connect Ngrok Tunnel
@@ -28,47 +33,15 @@ jobs:
         Start-Process "$env:USERPROFILE\ngrok\ngrok.exe" -ArgumentList "tcp 3389" -WindowStyle Hidden
       shell: powershell
 
-    - name: Wait for Ngrok and Send RDP Info to Telegram
-      env:
-        BOT_TOKEN: 7866819450:AAHvce1DZKafond6wlVQfA6Id6haVnFakCM  # Replace with your Telegram bot token
-        CHAT_ID: 5224269718      # Replace with your Telegram chat ID
+    - name: Connection Info
       run: |
-        Write-Host "⏳ Waiting 30s for Ngrok to start..."
-        Start-Sleep -Seconds 30
-
-        # Try fetching ngrok info multiple times
-        $success = $false
-        for ($i = 0; $i -lt 10; $i++) {
-          try {
-            $result = Invoke-RestMethod -Uri "http://127.0.0.1:4040/api/tunnels"
-            if ($result.tunnels) {
-              $rdp = $result.tunnels[0].public_url -replace "tcp://", ""
-              $success = $true
-              break
-            }
-          } catch {
-            Start-Sleep -Seconds 5
-          }
-        }
-
-        if ($success) {
-          $Message = @"
-✅ *Free 6 Hour RDP Created!*
-
-*RDP Address:* `$rdp`
-*Username:* `runneradmin`
-*Password:* `Gte2252@#`
-
-👉 *Connect via Microsoft Remote Desktop (mstsc.exe)*
-"@
-
-          $Message = [uri]::EscapeDataString($Message)
-          Invoke-RestMethod -Uri "https://api.telegram.org/bot$env:BOT_TOKEN/sendMessage?chat_id=$env:CHAT_ID&text=$Message&parse_mode=Markdown"
-          
-          Write-Host "✅ Sent RDP details to Telegram!"
-        } else {
-          Write-Host "❌ Failed to fetch Ngrok URL!"
-        }
+        echo "======================================"
+        echo "✅ RDP Info:"
+        echo "Username: runneradmin"
+        echo "Password: Gte2252@#"
+        echo "Wait 1 minute, then check Ngrok dashboard!"
+        echo "👉 https://dashboard.ngrok.com/cloud/tunnels"
+        echo "======================================"
       shell: powershell
 
     - name: Keep session alive for 6 hours
