@@ -11,57 +11,58 @@ jobs:
 
     steps:
     - name: Set RDP Password for Administrator
+      shell: powershell
       run: |
         net user Administrator Gte2252@#
         Set-ItemProperty -Path "HKLM:\System\CurrentControlSet\Control\Terminal Server" -Name "fDenyTSConnections" -Value 0
         Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
-      shell: powershell
 
     - name: Install Ngrok
+      shell: powershell
       run: |
         Invoke-WebRequest -Uri "https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-stable-windows-amd64.zip" -OutFile "ngrok.zip"
         Expand-Archive -Path "ngrok.zip" -DestinationPath "$env:USERPROFILE\ngrok"
-      shell: powershell
 
     - name: Start Ngrok Tunnel
+      shell: powershell
       run: |
         $env:Path += ";$env:USERPROFILE\ngrok"
         & "$env:USERPROFILE\ngrok\ngrok.exe" authtoken 2nRUQ69ivly9GBWgRLCniu2KfuI_3LiXvKERrZ8FB8JgGGK9L
-        Start-Process "$env:USERPROFILE\ngrok\ngrok.exe" -ArgumentList "tcp 3389" -WindowStyle Hidden
-      shell: powershell
+        Start-Process -FilePath "$env:USERPROFILE\ngrok\ngrok.exe" -ArgumentList "tcp 3389" -WindowStyle Hidden
+        Start-Sleep -Seconds 10
 
     - name: Wait and Send RDP Info to Telegram
+      shell: powershell
       env:
-        BOT_TOKEN: ${{ secrets.BOT_TOKEN }}    # Add this in your repo secrets
-        CHAT_ID: ${{ secrets.CHAT_ID }}        # Add this in your repo secrets
+        BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+        CHAT_ID: ${{ secrets.CHAT_ID }}
       run: |
-        Start-Sleep -Seconds 30
-
-        $success = $false
-        for ($i = 0; $i -lt 10; $i++) {
+        $retry = 0
+        $rdp = ""
+        while ($retry -lt 10) {
           try {
             $tunnels = Invoke-RestMethod -Uri "http://127.0.0.1:4040/api/tunnels"
-            $tcpUrl = ($tunnels.tunnels | Where-Object {$_.proto -eq "tcp"}).public_url
-            if ($tcpUrl) {
-              $rdp = $tcpUrl -replace "tcp://", ""
-              $success = $true
+            $tcpTunnel = $tunnels.tunnels | Where-Object { $_.proto -eq "tcp" }
+            if ($tcpTunnel -ne $null) {
+              $rdp = $tcpTunnel.public_url -replace "tcp://", ""
               break
             }
           } catch {
             Start-Sleep -Seconds 5
           }
+          $retry++
         }
 
-        if ($success) {
-          $Message = "✅ *6-Hour RDP Created!*`n`n*Address:* `$rdp``n*Username:* `Administrator``n*Password:* `Gte2252@#``n`n👉 Open `mstsc.exe` and connect!"
+        if ($rdp -ne "") {
+          $Message = "✅ *Free 6-Hour RDP Created!*`n`n*IP:PORT:* `$rdp``n*Username:* `Administrator``n*Password:* `Gte2252@#``n`n👉 Open `mstsc.exe` and connect!"
           $Message = [uri]::EscapeDataString($Message)
           Invoke-RestMethod -Uri "https://api.telegram.org/bot$env:BOT_TOKEN/sendMessage?chat_id=$env:CHAT_ID&text=$Message&parse_mode=Markdown"
-          Write-Host "✅ Sent to Telegram"
+          Write-Host "✅ Sent to Telegram successfully."
         } else {
-          Write-Host "❌ Could not fetch Ngrok address"
+          Write-Host "❌ Failed to fetch RDP address."
         }
-      shell: powershell
 
-    - name: Keep RDP session alive for 6 hours
-      run: Start-Sleep -Seconds 21600
+    - name: Keep RDP Session Alive for 6 Hours
       shell: powershell
+      run: |
+        Start-Sleep -Seconds 21600
