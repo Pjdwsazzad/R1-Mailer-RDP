@@ -2,8 +2,8 @@ name: Free 6-Hour RDP
 
 on:
   schedule:
-    - cron: '0 */6 * * *'  # Every 6 hours
-  workflow_dispatch:
+    - cron: '0 */6 * * *'  # <-- rerun every 6 hours
+  workflow_dispatch:       # <-- allow manual run too
 
 jobs:
   build:
@@ -12,7 +12,7 @@ jobs:
     steps:
     - name: Set RDP Password
       run: |
-        echo "Setting RDP password..."
+        echo "Setting password..."
         net user runneradmin Gte2252@#
         echo "Enabling RDP..."
         Set-ItemProperty -Path "HKLM:\System\CurrentControlSet\Control\Terminal Server" -Name "fDenyTSConnections" -Value 0
@@ -23,16 +23,27 @@ jobs:
       run: |
         Invoke-WebRequest -Uri "https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-stable-windows-amd64.zip" -OutFile "ngrok.zip"
         Expand-Archive -Path "ngrok.zip" -DestinationPath "$env:USERPROFILE\ngrok"
+        dir $env:USERPROFILE\ngrok
       shell: powershell
 
-    - name: Start Ngrok Tunnel
+    - name: Connect Ngrok Tunnel
       run: |
         $env:Path += ";$env:USERPROFILE\ngrok"
         & "$env:USERPROFILE\ngrok\ngrok.exe" authtoken 2wPgxVduGualacxoa361Yzj6dTj_3vbkCLAw6Ca1xmgFZxrNR
-        Start-Process -FilePath "$env:USERPROFILE\ngrok\ngrok.exe" -ArgumentList "tcp 3389" -NoNewWindow
-        Start-Sleep -Seconds 15
+        Start-Process "$env:USERPROFILE\ngrok\ngrok.exe" -ArgumentList "tcp 3389" -WindowStyle Hidden
       shell: powershell
 
-    - name: Keep Session Alive for 6 Hours
+    - name: Connection Info
+      run: |
+        echo "======================================"
+        echo "✅ RDP Info:"
+        echo "Username: runneradmin"
+        echo "Password: Gte2252@#"
+        echo "Wait 1 minute, then check Ngrok dashboard!"
+        echo "👉 https://dashboard.ngrok.com/cloud/tunnels"
+        echo "======================================"
+      shell: powershell
+
+    - name: Keep session alive for 6 hours
       run: Start-Sleep -Seconds 21600
       shell: powershell
