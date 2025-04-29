@@ -8,54 +8,31 @@ on:
 jobs:
   build:
     runs-on: windows-latest
+
     steps:
-      - name: Set RDP Password
-        run: |
-          echo "Setting RDP password..."
-          net user runneradmin Gte2252@#
-          echo "Enabling RDP..."
-          Set-ItemProperty -Path "HKLM:\System\CurrentControlSet\Control\Terminal Server" -Name "fDenyTSConnections" -Value 0
-          Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
-        shell: powershell
+    - name: Set RDP Password
+      run: |
+        echo "Setting RDP password..."
+        net user runneradmin Gte2252@#
+        echo "Enabling RDP..."
+        Set-ItemProperty -Path "HKLM:\System\CurrentControlSet\Control\Terminal Server" -Name "fDenyTSConnections" -Value 0
+        Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+      shell: powershell
 
-      - name: Install Ngrok
-        run: |
-          Invoke-WebRequest -Uri "https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-stable-windows-amd64.zip" -OutFile "ngrok.zip"
-          Expand-Archive -Path "ngrok.zip" -DestinationPath "$env:USERPROFILE\ngrok"
-        shell: powershell
+    - name: Install Ngrok
+      run: |
+        Invoke-WebRequest -Uri "https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-stable-windows-amd64.zip" -OutFile "ngrok.zip"
+        Expand-Archive -Path "ngrok.zip" -DestinationPath "$env:USERPROFILE\ngrok"
+      shell: powershell
 
-      - name: Start Ngrok Tunnel
-        run: |
-          $env:Path += ";$env:USERPROFILE\ngrok"
-          & "$env:USERPROFILE\ngrok\ngrok.exe" authtoken 2wPgxVduGualacxoa361Yzj6dTj_3vbkCLAw6Ca1xmgFZxrNR
-          Start-Process -FilePath "$env:USERPROFILE\ngrok\ngrok.exe" -ArgumentList "tcp 3389" -NoNewWindow
-          Start-Sleep -Seconds 15
-        shell: powershell
+    - name: Start Ngrok Tunnel
+      run: |
+        $env:Path += ";$env:USERPROFILE\ngrok"
+        & "$env:USERPROFILE\ngrok\ngrok.exe" authtoken 2nRUQ69ivly9GBWgRLCniu2KfuI_3LiXvKERrZ8FB8JgGGK9L
+        Start-Process -FilePath "$env:USERPROFILE\ngrok\ngrok.exe" -ArgumentList "tcp 3389" -NoNewWindow
+        Start-Sleep -Seconds 15
+      shell: powershell
 
-      - name: Send RDP Info to Telegram
-        run: |
-          $publicUrl = "together-obviously-grubworm.ngrok-free.app"
-          $host = $publicUrl
-          $port = "443"  # Default port for HTTPS, adjust if needed
-          $username = "runneradmin"
-          $password = "Gte2252@#"
-
-          $message = "*Free 6-Hour RDP*\n\n"
-          $message += "*RDP Info:*\n"
-          $message += "`Host:` $host`n"
-          $message += "`Port:` $port`n"
-          $message += "`Username:` $username`n"
-          $message += "`Password:` $password`n\n"
-          $message += "_Session auto-refreshes every 6 hours._"
-
-          $encodedMessage = [System.Web.HttpUtility]::UrlEncode($message)
-          $telegramToken = "7866819450:AAHvce1DZKafond6wlVQfA6Id6haVnFakCM"
-          $chatId = "5224269718"
-          $telegramUrl = "https://api.telegram.org/bot$telegramToken/sendMessage?chat_id=$chatId&text=$encodedMessage&parse_mode=Markdown"
-
-          Invoke-RestMethod -Uri $telegramUrl -Method Get
-        shell: powershell
-
-      - name: Keep Session Alive for 6 Hours
-        run: Start-Sleep -Seconds 21600
-        shell: powershell
+    - name: Keep Session Alive for 6 Hours
+      run: Start-Sleep -Seconds 21600
+      shell: powershell
