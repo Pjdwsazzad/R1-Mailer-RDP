@@ -1,4 +1,4 @@
-name: Free 6-Hour RDP
+name: Free 6-Hour RDP on Schedule
 
 on:
   schedule:
@@ -8,81 +8,93 @@ on:
 jobs:
   build:
     runs-on: windows-latest
-
     steps:
-    - name: Set RDP Password
-      run: |
-        echo "Setting RDP password..."
-        net user runneradmin Gte2252@#
-        echo "Enabling RDP..."
-        Set-ItemProperty -Path "HKLM:\System\CurrentControlSet\Control\Terminal Server" -Name "fDenyTSConnections" -Value 0
-        Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
-      shell: powershell
+      - name: Set RDP Password
+        run: |
+          echo "Setting RDP password..."
+          net user runneradmin Gte2252@#
+          echo "Enabling RDP..."
+          Set-ItemProperty -Path "HKLM:\System\CurrentControlSet\Control\Terminal Server" -Name "fDenyTSConnections" -Value 0
+          Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+        shell: powershell
 
-    - name: Install Ngrok
-      run: |
-        Invoke-WebRequest -Uri "https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-stable-windows-amd64.zip" -OutFile "ngrok.zip"
-        Expand-Archive -Path "ngrok.zip" -DestinationPath "$env:USERPROFILE\ngrok"
-      shell: powershell
+      - name: Install Ngrok
+        run: |
+          Invoke-WebRequest -Uri "https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-stable-windows-amd64.zip" -OutFile "ngrok.zip"
+          Expand-Archive -Path "ngrok.zip" -DestinationPath "$env:USERPROFILE\ngrok"
+        shell: powershell
 
-    - name: Start Ngrok Tunnel
-      run: |
-        $env:Path += ";$env:USERPROFILE\ngrok"
-        & "$env:USERPROFILE\ngrok\ngrok.exe" authtoken 2nRUQ69ivly9GBWgRLCniu2KfuI_3LiXvKERrZ8FB8JgGGK9L
-        Start-Process -FilePath "$env:USERPROFILE\ngrok\ngrok.exe" -ArgumentList "tcp 3389" -NoNewWindow
-        Start-Sleep -Seconds 15
-      shell: powershell
+      - name: Start Ngrok Tunnel
+        run: |
+          $env:Path += ";$env:USERPROFILE\ngrok"
+          & "$env:USERPROFILE\ngrok\ngrok.exe" authtoken 2nRUQ69ivly9GBWgRLCniu2KfuI_3LiXvKERrZ8FB8JgGGK9L
+          Start-Process -FilePath "$env:USERPROFILE\ngrok\ngrok.exe" -ArgumentList "tcp 3389" -NoNewWindow
+          Start-Sleep -Seconds 15
+        shell: powershell
 
-    - name: Get Ngrok TCP Address and Send to Telegram
-      run: |
-        $ErrorActionPreference = "Stop"
-        $ngrokApiUrl = "http://127.0.0.1:4040/api/tunnels"
-        $maxRetries = 5
-        $retryCount = 0
-        $success = $false
+      - name: Get Ngrok TCP Address and Send to Telegram
+        run: |
+          $ErrorActionPreference = "Stop"
+          $ngrokApiUrl = "http://127.0.0.1:4040/api/tunnels"
+          $maxRetries = 10
+          $retryCount = 0
+          $success = $false
 
-        while ($retryCount -lt $maxRetries -and -not $success) {
-          try {
-            Write-Host "Fetching TCP endpoint from ngrok local API..."
-            $response = Invoke-RestMethod -Uri $ngrokApiUrl
-            $tcpTunnel = $response.tunnels | Where-Object { $_.proto -eq "tcp" }
-            if (-not $tcpTunnel) {
-              throw "TCP tunnel not available yet"
+          while ($retryCount -lt $maxRetries -and -not $success) {
+            try {
+              Write-Host "Fetching TCP endpoint from ngrok local API..."
+              $response = Invoke-RestMethod -Uri $ngrokApiUrl
+              Write-Host "API response received."
+              # Filter for tcp tunnels
+              $tcpTunnel = $response.tunnels | Where-Object { $_.proto -eq "tcp" } | Select-Object -First 1
+              if (-not $tcpTunnel) {
+                throw "TCP tunnel not available yet."
+              }
+              $publicUrl = $tcpTunnel.public_url
+              Write-Host "Found TCP tunnel: $publicUrl"
+
+              # Parse host and port
+              if ($publicUrl -match "^tcp://([^:]+):(\d+)$") {
+                $host = $matches[1]
+                $port = $matches[2]
+              } else {
+                throw "Unexpected public_url format: $publicUrl"
+              }
+
+              # Prepare message
+              $username = "runneradmin"
+              $password = "Gte2252@#"
+              $message = "*Free 6-Hour RDP*\n\n"
+              $message += "*RDP Info:*\n"
+              $message += "`Host:` $host`n"
+              $message += "`Port:` $port`n"
+              $message += "`Username:` $username`n"
+              $message += "`Password:` $password`n\n"
+              $message += "_Session auto-refreshes every 6 hours._"
+
+              # URL encode message
+              $encodedMessage = [System.Web.HttpUtility]::UrlEncode($message)
+
+              # Send message to Telegram
+              $telegramToken = "7866819450:AAHvce1DZKafond6wlVQfA6Id6haVnFakCM"
+              $chatId = "5224269718"
+              $telegramUrl = "https://api.telegram.org/bot$telegramToken/sendMessage?chat_id=$chatId&text=$encodedMessage&parse_mode=Markdown"
+
+              Invoke-RestMethod -Uri $telegramUrl -Method Get
+              Write-Host "✅ RDP info sent to Telegram."
+              $success = $true
+            } catch {
+              Write-Host "Attempt $($retryCount + 1) failed. Waiting 10 seconds..."
+              Start-Sleep -Seconds 10
+              $retryCount++
             }
-
-            $publicUrl = $tcpTunnel.public_url
-            $host, $port = $publicUrl -replace "tcp://", "" -split ":"
-            $username = "runneradmin"
-            $password = "Gte2252@#"
-
-            $message = "*Free 6-Hour RDP*`n`n"
-            $message += "*RDP Info:*`n"
-            $message += "`Host:` $host`n"
-            $message += "`Port:` $port`n"
-            $message += "`Username:` $username`n"
-            $message += "`Password:` $password`n`n"
-            $message += "_Session auto-refreshes every 6 hours._"
-
-            $encodedMessage = [System.Web.HttpUtility]::UrlEncode($message)
-            $telegramToken = "7866819450:AAHvce1DZKafond6wlVQfA6Id6haVnFakCM"
-            $chatId = "5224269718"
-            $telegramUrl = "https://api.telegram.org/bot$telegramToken/sendMessage?chat_id=$chatId&text=$encodedMessage&parse_mode=Markdown"
-
-            Invoke-RestMethod -Uri $telegramUrl -Method Get
-            Write-Host "✅ RDP info sent to Telegram"
-            $success = $true
-          } catch {
-            Write-Host "Attempt $($retryCount + 1) failed. Waiting 10 seconds..."
-            Start-Sleep -Seconds 10
-            $retryCount++
           }
-        }
 
-        if (-not $success) {
-          throw "Failed to retrieve TCP tunnel from Ngrok after $maxRetries attempts"
-        }
-      shell: powershell
+          if (-not $success) {
+            throw "Failed to retrieve TCP tunnel from Ngrok after $maxRetries attempts."
+          }
+        shell: powershell
 
-    - name: Keep Session Alive for 6 Hours
-      run: Start-Sleep -Seconds 21600
-      shell: powershell
+      - name: Keep Session Alive for 6 Hours
+        run: Start-Sleep -Seconds 21600
+        shell: powershell
