@@ -12,7 +12,9 @@ jobs:
     steps:
     - name: Set RDP Password
       run: |
+        echo "Setting password..."
         net user runneradmin Gte2252@#
+        echo "Enabling RDP..."
         Set-ItemProperty -Path "HKLM:\System\CurrentControlSet\Control\Terminal Server" -Name "fDenyTSConnections" -Value 0
         Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
       shell: powershell
@@ -28,30 +30,25 @@ jobs:
         $env:Path += ";$env:USERPROFILE\ngrok"
         & "$env:USERPROFILE\ngrok\ngrok.exe" authtoken 2nRUQ69ivly9GBWgRLCniu2KfuI_3LiXvKERrZ8FB8JgGGK9L
         Start-Process -FilePath "$env:USERPROFILE\ngrok\ngrok.exe" -ArgumentList "tcp 3389" -NoNewWindow
-        Start-Sleep -Seconds 15
+        Start-Sleep -Seconds 20
       shell: powershell
 
     - name: Get Ngrok TCP Address and Send to Telegram
       run: |
         $ErrorActionPreference = "Stop"
-        $apiKey = "2nRUQ69ivly9GBWgRLCniu2KfuI_3LiXvKERrZ8FB8JgGGK9L"
-        $headers = @{
-          "Authorization" = "Bearer $apiKey"
-          "Ngrok-Version" = "2"
-        }
-        $maxRetries = 5
+        $maxRetries = 10
         $retryCount = 0
         $success = $false
         while ($retryCount -lt $maxRetries -and -not $success) {
           try {
-            Write-Host "Fetching TCP endpoint from ngrok.com API..."
-            $response = Invoke-RestMethod -Uri "https://api.ngrok.com/endpoints" -Headers $headers -Method Get
-            $tcpEndpoint = $response.endpoints | Where-Object { $_.proto -eq "tcp" }
-            if (-not $tcpEndpoint) {
-              throw "No TCP endpoint found yet"
+            Write-Host "Checking ngrok local API..."
+            $response = Invoke-RestMethod -Uri "http://127.0.0.1:4040/api/tunnels"
+            $tcpTunnel = $response.tunnels | Where-Object { $_.proto -eq "tcp" }
+            if (-not $tcpTunnel) {
+              throw "Ngrok TCP tunnel not found."
             }
 
-            $publicUrl = $tcpEndpoint.public_url
+            $publicUrl = $tcpTunnel.public_url
             $host, $port = $publicUrl -replace "tcp://", "" -split ":"
             $username = "runneradmin"
             $password = "Gte2252@#"
@@ -71,14 +68,14 @@ jobs:
 
             $success = $true
           } catch {
-            Write-Host "Attempt $($retryCount + 1) failed. Waiting 10 seconds..."
+            Write-Host "Attempt $($retryCount + 1) failed. Retrying in 10 seconds..."
             Start-Sleep -Seconds 10
             $retryCount++
           }
         }
 
         if (-not $success) {
-          throw "Failed to retrieve TCP tunnel after $maxRetries retries."
+          throw "Failed to retrieve ngrok TCP tunnel after $maxRetries retries."
         }
       shell: powershell
 
