@@ -10,10 +10,13 @@ jobs:
     runs-on: windows-latest
 
     steps:
-    - name: Set RDP Password
+    - name: Set RDP Password & Username
       shell: powershell
       run: |
-        net user runneradmin Gte2252@#
+        net user Administrator Gte2252@#  # Set password
+        reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon" /v AutoAdminLogon /t REG_SZ /d 1 /f
+        reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon" /v DefaultUsername /t REG_SZ /d Administrator /f
+        reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon" /v DefaultPassword /t REG_SZ /d Gte2252@# /f
         Set-ItemProperty -Path "HKLM:\System\CurrentControlSet\Control\Terminal Server" -Name "fDenyTSConnections" -Value 0
         Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
 
@@ -37,7 +40,6 @@ jobs:
         CHAT_ID: ${{ secrets.CHAT_ID }}
       run: |
         Start-Sleep -Seconds 30
-
         $success = $false
         for ($i = 0; $i -lt 10; $i++) {
           try {
@@ -54,15 +56,15 @@ jobs:
         }
 
         if ($success) {
-          $Message = "✅ *6-Hour RDP Created!*`n`n*Address:* `$rdp``n*Username:* `runneradmin``n*Password:* `Gte2252@#``n`n👉 Open `mstsc.exe` and connect!"
-          $Message = [uri]::EscapeDataString($Message)
-          Invoke-RestMethod -Uri "https://api.telegram.org/bot$env:BOT_TOKEN/sendMessage?chat_id=$env:CHAT_ID&text=$Message&parse_mode=Markdown"
+          $rdpEscaped = $rdp -replace '\.', '\.' -replace ':', '\:'  # Escape for MarkdownV2
+          $message = "✅ *6-Hour RDP Created\!*%0A%0A*Address:* `$rdpEscaped`%0A*Username:* `Administrator`%0A*Password:* `Gte2252@#`%0A%0A👉 Open mstsc\.exe and connect\!"
+          Invoke-RestMethod -Uri "https://api.telegram.org/bot$env:BOT_TOKEN/sendMessage?chat_id=$env:CHAT_ID&text=$message&parse_mode=MarkdownV2"
           Write-Host "✅ Sent to Telegram"
         } else {
           Write-Host "❌ Could not fetch Ngrok address"
         }
 
-    - name: Keep Session Alive
+    - name: Keep Session Alive for 6 Hours
       shell: powershell
       run: |
         Start-Sleep -Seconds 21600
