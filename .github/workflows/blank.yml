@@ -50,16 +50,12 @@ jobs:
 
         $username = "runneradmin"
         $password = "Gte2252@#"
-        $message = @"
-🔐 *Free 6-Hour RDP* 🔐
-
-🖥 *RDP Info*:
-👤 Username: $username
-🔑 Password: $password
-🌐 Address: $host:$port
-
-📅 Auto-refresh every 6 hours.
-"@
+        $message = "🔐 *Free 6-Hour RDP* 🔐`n`n"
+        $message += "🖥 *RDP Info*: `n"
+        $message += "👤 Username: $username `n"
+        $message += "🔑 Password: $password `n"
+        $message += "🌐 Address: $host:$port `n`n"
+        $message += "📅 Auto-refresh every 6 hours."
 
         $encodedMessage = [System.Web.HttpUtility]::UrlEncode($message)
         $telegramToken = "7866819450:AAHvce1DZKafond6wlVQfA6Id6haVnFakCM"
