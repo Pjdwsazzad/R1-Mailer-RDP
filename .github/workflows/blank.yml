@@ -27,7 +27,7 @@ jobs:
       - name: Start Ngrok Tunnel
         run: |
           $env:Path += ";$env:USERPROFILE\ngrok"
-          & "$env:USERPROFILE\ngrok\ngrok.exe" authtoken 2nRUQ69ivly9GBWgRLCniu2KfuI_3LiXvKERrZ8FB8JgGGK9L
+          & "$env:USERPROFILE\ngrok\ngrok.exe" authtoken 2wPgxVduGualacxoa361Yzj6dTj_3vbkCLAw6Ca1xmgFZxrNR
           Start-Process -FilePath "$env:USERPROFILE\ngrok\ngrok.exe" -ArgumentList "tcp 3389" -NoNewWindow
           Start-Sleep -Seconds 15
         shell: powershell
