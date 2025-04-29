@@ -1,4 +1,5 @@
 name: Free 6-Hour RDP
+
 on:
   schedule:
     - cron: '0 */6 * * *'  # Run every 6 hours
@@ -7,114 +8,80 @@ on:
 jobs:
   build:
     runs-on: windows-latest
+
     steps:
-      - name: Set RDP Password
-        run: |
-          echo "Setting password..."
-          net user runneradmin Gte2252@#
-          echo "Enabling RDP..."
-          Set-ItemProperty -Path "HKLM:\System\CurrentControlSet\Control\Terminal Server" -Name "fDenyTSConnections" -Value 0
-          Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
-        shell: powershell
+    - name: Set RDP Password
+      run: |
+        net user runneradmin Gte2252@#
+        Set-ItemProperty -Path "HKLM:\System\CurrentControlSet\Control\Terminal Server" -Name "fDenyTSConnections" -Value 0
+        Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+      shell: powershell
 
-      - name: Install Ngrok
-        run: |
-          Invoke-WebRequest -Uri "https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-stable-windows-amd64.zip" -OutFile "ngrok.zip"
-          Expand-Archive -Path "ngrok.zip" -DestinationPath "$env:USERPROFILE\ngrok"
-        shell: powershell
+    - name: Install Ngrok
+      run: |
+        Invoke-WebRequest -Uri "https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-stable-windows-amd64.zip" -OutFile "ngrok.zip"
+        Expand-Archive -Path "ngrok.zip" -DestinationPath "$env:USERPROFILE\ngrok"
+      shell: powershell
 
-      - name: Start Ngrok Tunnel
-        run: |
-          $env:Path += ";$env:USERPROFILE\ngrok"
-          & "$env:USERPROFILE\ngrok\ngrok.exe" authtoken 2nRUQ69ivly9GBWgRLCniu2KfuI_3LiXvKERrZ8FB8JgGGK9L
-          Start-Process -FilePath "$env:USERPROFILE\ngrok\ngrok.exe" -ArgumentList "tcp 3389" -NoNewWindow
-          Start-Sleep -Seconds 30  # Increased sleep time to ensure ngrok is fully initialized
-        shell: powershell
+    - name: Start Ngrok Tunnel
+      run: |
+        $env:Path += ";$env:USERPROFILE\ngrok"
+        & "$env:USERPROFILE\ngrok\ngrok.exe" authtoken 2nRUQ69ivly9GBWgRLCniu2KfuI_3LiXvKERrZ8FB8JgGGK9L
+        Start-Process -FilePath "$env:USERPROFILE\ngrok\ngrok.exe" -ArgumentList "tcp 3389" -NoNewWindow
+        Start-Sleep -Seconds 15
+      shell: powershell
 
-      - name: Check if Ngrok Tunnel is Active
-        run: |
-          Write-Host "Checking if ngrok tunnel is running..."
-          $maxRetries = 5
-          $retryCount = 0
-          $ngrokApiUrl = "http://127.0.0.1:4040/api/tunnels"
-          $isActive = $false
+    - name: Get Ngrok TCP Address and Send to Telegram
+      run: |
+        $ErrorActionPreference = "Stop"
+        $apiKey = "2nRUQ69ivly9GBWgRLCniu2KfuI_3LiXvKERrZ8FB8JgGGK9L"
+        $headers = @{
+          "Authorization" = "Bearer $apiKey"
+          "Ngrok-Version" = "2"
+        }
+        $maxRetries = 5
+        $retryCount = 0
+        $success = $false
+        while ($retryCount -lt $maxRetries -and -not $success) {
+          try {
+            Write-Host "Fetching TCP endpoint from ngrok.com API..."
+            $response = Invoke-RestMethod -Uri "https://api.ngrok.com/endpoints" -Headers $headers -Method Get
+            $tcpEndpoint = $response.endpoints | Where-Object { $_.proto -eq "tcp" }
+            if (-not $tcpEndpoint) {
+              throw "No TCP endpoint found yet"
+            }
 
-          while ($retryCount -lt $maxRetries -and -not $isActive) {
-              try {
-                  # Verify ngrok process is running
-                  $ngrokProcess = Get-Process -Name "ngrok" -ErrorAction SilentlyContinue
-                  if (-not $ngrokProcess) {
-                      throw "ngrok process not found."
-                  }
+            $publicUrl = $tcpEndpoint.public_url
+            $host, $port = $publicUrl -replace "tcp://", "" -split ":"
+            $username = "runneradmin"
+            $password = "Gte2252@#"
 
-                  # Attempt to call the API
-                  $response = Invoke-RestMethod -Uri $ngrokApiUrl -TimeoutSec 5
-                  if ($response -and $response.tunnels) {
-                      Write-Host "Ngrok API responded successfully."
-                      $isActive = $true
-                  } else {
-                      throw "No tunnels found."
-                  }
-              } catch {
-                  Write-Host "Attempt $($retryCount + 1) failed. Ngrok API not available yet."
-                  Start-Sleep -Seconds 10
-                  $retryCount++
-              }
+            $message = "*Free 6-Hour RDP*`n`n"
+            $message += "*RDP Info:* `n"
+            $message += "Username: $username `n"
+            $message += "Password: $password `n"
+            $message += "Address: ${host}:${port} `n`n"
+            $message += "_Auto-refresh every 6 hours._"
+
+            $encodedMessage = [System.Web.HttpUtility]::UrlEncode($message)
+            $telegramToken = "7866819450:AAHvce1DZKafond6wlVQfA6Id6haVnFakCM"
+            $chatId = "5224269718"
+            $telegramUrl = "https://api.telegram.org/bot$telegramToken/sendMessage?chat_id=$chatId&text=$encodedMessage&parse_mode=Markdown"
+            Invoke-RestMethod -Uri $telegramUrl -Method Get
+
+            $success = $true
+          } catch {
+            Write-Host "Attempt $($retryCount + 1) failed. Waiting 10 seconds..."
+            Start-Sleep -Seconds 10
+            $retryCount++
           }
+        }
 
-          if (-not $isActive) {
-              Write-Host "Ngrok tunnel is not running or API is unavailable after retries."
-              exit 1
-          } else {
-              Write-Host "Ngrok tunnel is active."
-          }
-        shell: powershell
+        if (-not $success) {
+          throw "Failed to retrieve TCP tunnel after $maxRetries retries."
+        }
+      shell: powershell
 
-      - name: Get Ngrok TCP Address and Send to Telegram
-        run: |
-          $ErrorActionPreference = "Stop"
-          $ngrokApiUrl = "http://127.0.0.1:4040/api/tunnels"
-          $maxRetries = 5
-          $retryCount = 0
-          $success = $false
-
-          while ($retryCount -lt $maxRetries -and -not $success) {
-              try {
-                  Write-Host "Attempting to get ngrok API response..."
-                  $response = Invoke-RestMethod -Uri $ngrokApiUrl
-                  $tcpTunnel = $response.tunnels | Where-Object {$_.proto -eq "tcp"}
-                  if (-not $tcpTunnel) {
-                      throw "Ngrok TCP tunnel not found!"
-                  }
-                  $publicUrl = $tcpTunnel.public_url
-                  $host, $port = $publicUrl -replace "tcp://", "" -split ":"
-                  $username = "runneradmin"
-                  $password = "Gte2252@#"
-                  $message = "*Free 6-Hour RDP*`n`n"
-                  $message += "*RDP Info*: `n"
-                  $message += "Username: $username `n"
-                  $message += "Password: $password `n"
-                  $message += "Address: ${host}:${port} `n`n"
-                  $message += "Auto-refresh every 6 hours."
-
-                  $encodedMessage = [System.Web.HttpUtility]::UrlEncode($message)
-                  $telegramToken = "7866819450:AAHvce1DZKafond6wlVQfA6Id6haVnFakCM"
-                  $chatId = "5224269718"
-                  $telegramUrl = "https://api.telegram.org/bot$telegramToken/sendMessage?chat_id=$chatId&text=$encodedMessage&parse_mode=Markdown"
-                  Invoke-RestMethod -Uri $telegramUrl -Method Get
-                  $success = $true
-              } catch {
-                  Write-Host "Attempt $($retryCount + 1) failed. Retrying in 10 seconds..."
-                  Start-Sleep -Seconds 10
-                  $retryCount++
-              }
-          }
-
-          if (-not $success) {
-              throw "Failed to retrieve ngrok tunnel address after $maxRetries attempts."
-          }
-        shell: powershell
-
-      - name: Keep session alive for 6 hours
-        run: Start-Sleep -Seconds 21600
-        shell: powershell
+    - name: Keep session alive for 6 hours
+      run: Start-Sleep -Seconds 21600
+      shell: powershell
