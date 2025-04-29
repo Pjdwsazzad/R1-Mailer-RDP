@@ -57,11 +57,13 @@ jobs:
         $message += "🌐 Address: $host:$port `n`n"
         $message += "📅 Auto-refresh every 6 hours."
 
+        # URL encode the message
         $encodedMessage = [System.Web.HttpUtility]::UrlEncode($message)
         $telegramToken = "7866819450:AAHvce1DZKafond6wlVQfA6Id6haVnFakCM"
         $chatId = "5224269718"
         $telegramUrl = "https://api.telegram.org/bot$telegramToken/sendMessage?chat_id=$chatId&text=$encodedMessage&parse_mode=Markdown"
 
+        # Send the message via Telegram API
         Invoke-RestMethod -Uri $telegramUrl -Method Get
       shell: powershell
 
